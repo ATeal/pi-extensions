@@ -128,13 +128,14 @@ const AgentKindEnum = StringEnum(
 const MachineParam = Type.Optional(
 	Type.String({
 		description:
-			"Saved Herdr SSH machine label or ID from herdr_layout machine_list. Omit for the local Herdr server. Workspace, tab, and pane IDs belong to one machine.",
+			"Saved Herdr SSH machine label or ID from herdr_layout machine_list. Omit or leave empty for the local Herdr server. Workspace, tab, and pane IDs belong to one machine.",
 	}),
 );
 
 function machineArgs(machine?: string): string[] {
-	if (machine === undefined) return [];
-	if (!machine || machine.startsWith("-")) throw new Error(`Invalid machine: '${machine}'`);
+	// Empty means local, matching every other `machine` check in this file.
+	if (!machine) return [];
+	if (machine.startsWith("-")) throw new Error(`Invalid machine: '${machine}'`);
 	return ["--machine", machine];
 }
 
@@ -381,7 +382,7 @@ export default function (pi: ExtensionAPI) {
 			),
 			label: Type.Optional(Type.String({ description: "Label for a new workspace or tab" })),
 			direction: Type.Optional(DirectionEnum),
-			cwd: Type.Optional(Type.String({ description: "Working directory. Defaults to the caller pane's foreground cwd." })),
+			cwd: Type.Optional(Type.String({ description: "Working directory. Defaults to the caller pane's foreground cwd locally; with machine, to the remote server's default." })),
 			focus: Type.Optional(Type.Boolean({ description: "Change UI focus after creation. Defaults to false." })),
 			machine: MachineParam,
 		}),
@@ -549,7 +550,7 @@ export default function (pi: ExtensionAPI) {
 		promptGuidelines: [
 			"Use herdr_pane for ordinary commands and raw terminal control; use herdr_agent for coding-agent prompts, lifecycle waits, reads, and interactive keys.",
 			"Use herdr_pane wait_output for tests, servers, builds, and watchers. It searches existing output immediately; use recent-unwrapped for logs and transcripts.",
-			"Do not close a Herdr pane you did not create unless the user explicitly asks. herdr_pane always refuses to close the pane running the current pi process.",
+			"Do not close a Herdr pane you did not create unless the user explicitly asks. On the local Herdr server, herdr_pane always refuses to close the pane running the current pi process.",
 		],
 		parameters: Type.Object({
 			action: StringEnum(["get", "run", "read", "wait_output", "send_text", "send_keys", "close"] as const, {

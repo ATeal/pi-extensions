@@ -403,6 +403,18 @@ describe("pi-herdr", () => {
 			).rejects.toThrow("Invalid machine");
 		});
 
+		test("treats an empty machine as the local server", async () => {
+			const calls: string[][] = [];
+			const tools = registerTools((args) => {
+				calls.push(args);
+				return { type: "workspace_list", workspaces: [] };
+			});
+
+			await tools.get("herdr_layout").execute("test", { action: "workspace_list", machine: "" }, undefined, undefined, {});
+
+			expect(calls).toEqual([["workspace", "list"]]);
+		});
+
 		test("refuses caller-relative current on a remote machine", async () => {
 			const tools = registerTools((args) => {
 				rejectCurrent(args);
@@ -432,6 +444,28 @@ describe("pi-herdr", () => {
 
 			expect(calls).toEqual([["--machine", "devbox", "pane", "list"]]);
 			expect(result.content[0].text).not.toContain("current");
+		});
+
+		test("requires an explicit workspace to create a tab on a remote machine", async () => {
+			const tools = registerTools((args) => {
+				rejectCurrent(args);
+				return {};
+			});
+
+			await expect(
+				tools.get("herdr_layout").execute("test", { action: "tab_create", machine: "devbox" }, undefined, undefined, {}),
+			).rejects.toThrow("'workspace' is required for tab_create with 'machine'");
+		});
+
+		test("requires an explicit pane for layout on a remote machine", async () => {
+			const tools = registerTools((args) => {
+				rejectCurrent(args);
+				return {};
+			});
+
+			await expect(
+				tools.get("herdr_layout").execute("test", { action: "pane_layout", machine: "devbox" }, undefined, undefined, {}),
+			).rejects.toThrow("'pane' is required for pane_layout with 'machine'");
 		});
 
 		test("requires an explicit pane to split on a remote machine", async () => {
