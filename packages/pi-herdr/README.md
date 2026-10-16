@@ -77,7 +77,7 @@ Workspace, tab, and pane IDs are opaque. Always use IDs returned by Herdr instea
 { "action": "pane_move", "pane": "w1:p2", "newWorkspace": true, "label": "review", "tabLabel": "agent" }
 ```
 
-The pane ID can change after a move, especially across workspaces. The result reports the returned pane ID, tab ID, and workspace ID. Use that pane ID for all subsequent calls, not the old ID. Agent names follow the pane and remain valid targets for `herdr_agent`. Do not move panes you did not create unless the user explicitly asks.
+The pane ID can change after a move, especially across workspaces. The result reports the returned pane ID, tab ID, and workspace ID. Use that pane ID for all subsequent calls, not the old ID. When Herdr leaves the pane where it is, for example because it is already in that tab or the tab is zoomed, the result says it was not moved and why. Agent names follow the pane and remain valid targets for `herdr_agent`. Do not move panes you did not create unless the user explicitly asks.
 
 ### `herdr_pane`
 

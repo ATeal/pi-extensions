@@ -45,6 +45,7 @@ interface PaneMoveResult {
 	created_tab?: TabInfo;
 	created_workspace?: WorkspaceInfo;
 	changed: boolean;
+	reason?: "same_tab" | "zoomed_tab" | null;
 }
 
 interface AgentInfo {
@@ -532,10 +533,11 @@ export default function (pi: ExtensionAPI) {
 					if (!params.pane) throw new Error("'pane' is required for pane_move");
 					const destinations = Number(Boolean(params.tab)) + Number(params.newTab === true) + Number(params.newWorkspace === true);
 					if (destinations !== 1) throw new Error("pane_move requires exactly one of 'tab', 'newTab', or 'newWorkspace'");
-					if (params.workspace !== undefined && params.newTab !== true) throw new Error("'workspace' is only valid with 'newTab' for pane_move");
-					if (params.tabLabel !== undefined && params.newWorkspace !== true) throw new Error("'tabLabel' is only valid with 'newWorkspace' for pane_move");
-					if (params.label !== undefined && params.tab) throw new Error("'label' requires 'newTab' or 'newWorkspace' for pane_move");
-					if (!params.tab && (params.direction !== undefined || params.targetPane !== undefined || params.ratio !== undefined)) {
+					// Empty strings count as omitted, as they do when the args are built below.
+					if (params.workspace && params.newTab !== true) throw new Error("'workspace' is only valid with 'newTab' for pane_move");
+					if (params.tabLabel && params.newWorkspace !== true) throw new Error("'tabLabel' is only valid with 'newWorkspace' for pane_move");
+					if (params.label && params.tab) throw new Error("'label' requires 'newTab' or 'newWorkspace' for pane_move");
+					if (!params.tab && (params.direction !== undefined || params.targetPane || params.ratio !== undefined)) {
 						throw new Error("'direction', 'targetPane', and 'ratio' require 'tab' for pane_move");
 					}
 					const args = ["pane", "move", params.pane];
@@ -556,6 +558,12 @@ export default function (pi: ExtensionAPI) {
 					const response = await execHerdrJson<{ result: { move_result: PaneMoveResult } }>(args, signal, machine);
 					const moveResult = response.result.move_result;
 					const pane = moveResult.pane;
+					if (!moveResult.changed) {
+						return {
+							content: [{ type: "text", text: `Pane ${pane.pane_id} was not moved (${moveResult.reason ?? "no change"}). It is still in tab ${pane.tab_id}, workspace ${pane.workspace_id}.` }],
+							details: { action: "pane_move", pane, sourcePaneId: moveResult.previous_pane_id, moveResult },
+						};
+					}
 					return {
 						content: [{ type: "text", text: `Moved pane ${moveResult.previous_pane_id} to pane ${pane.pane_id}, tab ${pane.tab_id}, workspace ${pane.workspace_id}. Use pane ${pane.pane_id} for subsequent calls; the pane ID can change after a move. Agent names follow the pane.` }],
 						details: { action: "pane_move", pane, sourcePaneId: moveResult.previous_pane_id, moveResult },
@@ -696,8 +704,11 @@ export default function (pi: ExtensionAPI) {
 				case "close": {
 					// The caller pane lives on the local server, and pane IDs repeat across machines.
 					if (!params.machine) {
+						// After pi moves its own pane, HERDR_PANE_ID keeps the old ID, which herdr still resolves for pi's calls.
 						const current = await getCurrentPane(signal);
-						if (params.pane === current.pane_id) throw new Error("Refusing to close the pane pi is running in.");
+						if (params.pane === current.pane_id || params.pane === process.env.HERDR_PANE_ID) {
+							throw new Error("Refusing to close the pane pi is running in.");
+						}
 					}
 					await execHerdr(["pane", "close", params.pane], signal, params.machine);
 					return {

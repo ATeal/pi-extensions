@@ -248,6 +248,40 @@ describe("pi-herdr", () => {
 			expect(result.details.pane.pane_id).toBe("w1:p1");
 		});
 
+		test("says so when Herdr does not move the pane", async () => {
+			const tools = registerTools(() => ({
+				type: "pane_move",
+				move_result: { ...moveResult, changed: false, reason: "same_tab", previous_pane_id: "w2:p6" },
+			}));
+			const result = await tools.get("herdr_layout").execute(
+				"test", { action: "pane_move", pane: "w2:p6", tab: "w2:t3", direction: "right" }, undefined, undefined, {},
+			);
+			expect(result.content[0].text).toBe("Pane w2:p6 was not moved (same_tab). It is still in tab w2:t3, workspace w2.");
+			expect(result.details.moveResult.changed).toBe(false);
+		});
+
+		test("treats empty optional strings as omitted", async () => {
+			const calls: string[][] = [];
+			const tools = registerTools((args) => {
+				calls.push(args);
+				return { type: "pane_move", move_result: moveResult };
+			});
+			await tools.get("herdr_layout").execute(
+				"test",
+				{ action: "pane_move", pane: "w1:p2", tab: "w2:t3", direction: "down", workspace: "", label: "", tabLabel: "", targetPane: "" },
+				undefined,
+				undefined,
+				{},
+			);
+			await tools.get("herdr_layout").execute(
+				"test", { action: "pane_move", pane: "w1:p2", newTab: true, targetPane: "" }, undefined, undefined, {},
+			);
+			expect(calls).toEqual([
+				["pane", "move", "w1:p2", "--tab", "w2:t3", "--split", "down", "--no-focus"],
+				["pane", "move", "w1:p2", "--new-tab", "--no-focus"],
+			]);
+		});
+
 		test("propagates Herdr move errors", async () => {
 			const tools = registerTools(() => JSON.stringify({ error: { code: "pane_not_found", message: "No such pane" } }));
 			await expect(
@@ -368,6 +402,21 @@ describe("pi-herdr", () => {
 				{},
 			),
 		).rejects.toThrow("Refusing to close");
+	});
+
+	test("refuses to close its own pane by the old ID after moving it", async () => {
+		const calls: string[][] = [];
+		const tools = registerTools((args) => {
+			calls.push(args);
+			// pi's pane moved to another workspace: herdr reports the new ID, HERDR_PANE_ID still holds w1:p1.
+			if (args[0] === "pane" && args[1] === "current") return { type: "pane_current", pane: { ...currentPane, pane_id: "w2:p6" } };
+			throw new Error(`unexpected command: ${args.join(" ")}`);
+		});
+
+		await expect(
+			tools.get("herdr_pane").execute("test", { action: "close", pane: "w1:p1" }, undefined, undefined, {}),
+		).rejects.toThrow("Refusing to close");
+		expect(calls).toEqual([["pane", "current", "--current"]]);
 	});
 
 	test("starts a named agent in an existing pane", async () => {
